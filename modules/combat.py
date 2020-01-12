@@ -21,6 +21,8 @@ class CombatModule(object):
 
         self.exit = 0
         self.combats_done = 0
+        self.combats_accomplished = 0
+        self.last_ambush = False
         self.l = []
         self.blacklist = []
         self.movement_event = {}
@@ -49,6 +51,21 @@ class CombatModule(object):
             'button_switch_fleet': Region(1430, 985, 240, 60),
             'menu_nav_back': Region(54, 57, 67, 67)
         }
+        self.boss_spawns = {
+            '1-1': 1, '1-2': 2, '1-3': 2, '1-4': 3,
+            '2-1': 2, '2-2': 3, '2-3': 3, '2-4': 3,
+            '3-1': 3, '3-2': 3, '3-3': 3, '3-4': 3,
+            '4-1': 3, '4-2': 3, '4-3': 3, '4-4': 4,
+            '5-1': 4, '5-2': 4, '5-3': 4, '5-4': 4,
+            '6-1': 4, '6-2': 4, '6-3': 4, '6-4': 5,
+            '7-1': 5, '7-2': 5, '7-3': 5, '7-4': 5,
+            '8-1': 4, '8-2': 4, '8-3': 4, '8-4': 4,
+            '9-1': 5, '9-2': 5, '9-3': 5, '9-4': 5,
+            '10-1': 6, '10-2': 6, '10-3': 6, '10-4': 6,
+            '11-1': 6, '11-2': 6, '11-3': 6, '11-4': 6,
+            '12-1': 6, '12-2': 6, '12-3': 6, '12-4': 6,
+            '13-1': 6, '13-2': 6, '13-3': 6, '13-4': 7
+        }
 
     def combat_logic_wrapper(self):
         """Method that fires off the necessary child methods that encapsulates
@@ -59,6 +76,8 @@ class CombatModule(object):
         """
         self.exit = 0
         self.combats_done = 0
+        self.combats_accomplished = 0
+        self.last_ambush = False
         self.l.clear()
         self.blacklist.clear()
 
@@ -223,6 +242,9 @@ class CombatModule(object):
                 continue
             if Utils.find("combat/button_confirm"):
                 Logger.log_msg("Combat ended.")
+                self.combats_accomplished += 1
+                if self.chapter_map in self.boss_spawns and self.combats_accomplished <= self.boss_spawns[self.chapter_map]:
+                    Logger.log_msg("%d/%d effective combats accomplished to boss spawn." %(self.combats_accomplished, self.boss_spawns[self.chapter_map]))
                 Utils.touch_randomly(self.region["combat_end_confirm"])
                 Utils.script_sleep(1)
                 if boss:
@@ -270,11 +292,16 @@ class CombatModule(object):
 
             if event["combat/button_evade"]:
                 Logger.log_msg("Ambush was found, trying to evade.")
+                self.last_ambush = True
                 Utils.touch_randomly(self.region["combat_ambush_evade"])
-                Utils.script_sleep(0.5)
+                Utils.script_sleep(0.5) # Increase value for better reliability in detecting evasion battles
                 continue
-            if event["combat/alert_failed_evade"]:
-                Logger.log_warning("Failed to evade ambush.")
+            if self.last_ambush and event["combat/menu_formation"]:
+                Logger.log_warning("Evasion failed, combating with ambush fleet.")
+                self.combats_accomplished -= 1
+                if self.chapter_map in self.boss_spawns:
+                    Logger.log_debug("Reducing effective combats accomplished to %d/%d." %(self.combats_accomplished, self.boss_spawns[self.chapter_map]))
+                self.last_ambush = False
                 Utils.touch_randomly(self.region["menu_combat_start"])
                 self.battle_handler()
                 continue
@@ -296,6 +323,9 @@ class CombatModule(object):
                 return 1
             else:
                 if count != 0 and count % 3 == 0:
+                    if self.last_ambush:
+                        Logger.log_msg("Ambush evaded successfully.")
+                        self.last_ambush = False
                     Utils.touch(location)
                 if count > 21:
                     Logger.log_msg("Blacklisting location and searching for another enemy.")
@@ -412,6 +442,11 @@ class CombatModule(object):
             if self.exit != 0:
                 self.retreat_handler()
                 return True
+            if self.chapter_map in self.boss_spawns and self.combats_accomplished == self.boss_spawns[self.chapter_map]:
+                Logger.log_msg("Boss appeared in middle, proceed to clear.")
+                boss_info = [960, 540, "boss"]
+                self.clear_boss(boss_info)
+                continue
             if Utils.find("enemy/fleet_boss", 0.9, self.chapter_map):
                 Logger.log_msg("Boss fleet was found.")
 
@@ -635,8 +670,6 @@ class CombatModule(object):
     def check_movement_threads(self):
         thread_check_button_evade = Thread(
             target=self.check_movement_threads_func, args=("combat/button_evade",))
-        thread_check_failed_evade = Thread(
-            target=self.check_movement_threads_func, args=("combat/alert_failed_evade",))
         thread_check_alert_info = Thread(
             target=self.check_movement_threads_func, args=("menu/alert_info",))
         thread_check_item_found = Thread(
@@ -647,7 +680,7 @@ class CombatModule(object):
             target=self.check_movement_threads_func, args=("combat/menu_loading",))
 
         Utils.multithreader([
-            thread_check_button_evade, thread_check_failed_evade,
+            thread_check_button_evade,
             thread_check_alert_info, thread_check_item_found,
             thread_check_menu_formation, thread_check_menu_loading])
 
