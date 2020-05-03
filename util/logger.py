@@ -17,6 +17,7 @@ class Logger(object):
     CLR_WARNING = '\033[93m'
     CLR_ERROR = '\033[91m'
     CLR_INFO = '\u001b[35m'
+    CLR_DEBUG = '\033[97m'
     CLR_END = '\033[0m'
 
     def enable_debugging(self):
@@ -100,5 +101,5 @@ class Logger(object):
             msg (string): log msg
         """
         if not cls.debug: return
-        print("{}".format(
-        cls.log_format(msg)))
+        print("{}{}{}".format(
+        	cls.CLR_DEBUG, cls.log_format(msg), cls.CLR_END))

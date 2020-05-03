@@ -11,7 +11,7 @@ class Adb(object):
     def init(self):
         """Kills and starts a new ADB server
         """
-        self.kill_server()
+        #self.kill_server()
         return self.start_server() 
 
 
